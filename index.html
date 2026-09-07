@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Paint</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <style>
+        body {
+            margin: 0;
+            background-color: #121212;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            position: relative;
+            width: 1280px;
+            height: 720px;
+            margin-top: 10px;
+        }
+
+        video,
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1280px;
+            height: 720px;
+            border-radius: 8px;
+        }
+
+        /* Video disembunyikan, hasil digambar ke canvas */
+        video {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Virtual Air Drawing (MediaPipe Web)</h2>
+    <div class="container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas" width="1280" height="720"></canvas>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+
+        // Canvas terpisah untuk coretan (Persistent Drawing)
+        const paintCanvas = document.createElement('canvas');
+        paintCanvas.width = 1280;
+        paintCanvas.height = 720;
+        const paintCtx = paintCanvas.getContext('2d');
+
+        let drawColor = '#00FF00';
+        let brushThickness = 15;
+        let eraserThickness = 80;
+
+        // Multi-hand tracking state
+        let xp = Array(10).fill(0);
+        let yp = Array(10).fill(0);
+
+        // Tombol UI
+        const headerRects = [
+            { label: "RED", rect: [50, 20, 150, 100], color: "#FF0000", type: "color" },
+            { label: "GREEN", rect: [170, 20, 270, 100], color: "#00FF00", type: "color" },
+            { label: "BLUE", rect: [290, 20, 390, 100], color: "#0000FF", type: "color" },
+            { label: "YELLOW", rect: [410, 20, 510, 100], color: "#FFFF00", type: "color" },
+            { label: "ERASER", rect: [530, 20, 680, 100], color: "#FFFFFF", type: "eraser" },
+            { label: "CLEAR", rect: [700, 20, 850, 100], color: "#C83232", type: "action" }
+        ];
+
+        function drawHeader(ctx) {
+            ctx.fillStyle = "rgb(30, 30, 30)";
+            ctx.fillRect(0, 0, 1280, 120);
+
+            headerRects.forEach(item => {
+                const [x1, y1, x2, y2] = item.rect;
+                ctx.fillStyle = item.color;
+                ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+
+                ctx.fillStyle = item.type === "eraser" ? "#000000" : "#FFFFFF";
+                ctx.font = "bold 20px Arial";
+                ctx.fillText(item.label, x1 + 15, y1 + 50);
+            });
+        }
+
+        function checkFingersUp(landmarks) {
+            const tipIds = [4, 8, 12, 16, 20];
+            let fingers = [];
+
+            // Ibu Jari
+            fingers.push(landmarks[tipIds[0]].x < landmarks[tipIds[0] - 1].x ? 1 : 0);
+
+            // 4 Jari lainnya
+            for (let i = 1; i < 5; i++) {
+                fingers.push(landmarks[tipIds[i]].y < landmarks[tipIds[i] - 2].y ? 1 : 0);
+            }
+            return fingers;
+        }
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            // Gambar mirror dari webcam
+            canvasCtx.translate(canvasElement.width, 0);
+            canvasCtx.scale(-1, 1);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.restore();
+
+            // Gabungkan gambar kanvas coretan
+            canvasCtx.drawImage(paintCanvas, 0, 0);
+
+            // Gambar Header UI
+            drawHeader(canvasCtx);
+
+            if (results.multiHandLandmarks) {
+                for (let i = 0; i < results.multiHandLandmarks.length; i++) {
+                    const landmarks = results.multiHandLandmarks[i];
+                    const fingers = checkFingersUp(landmarks);
+
+                    // Posisi Telunjuk (di-mirror)
+                    const x1 = Math.floor((1 - landmarks[8].x) * canvasElement.width);
+                    const y1 = Math.floor(landmarks[8].y * canvasElement.height);
+
+                    // Mode Seleksi (Telunjuk & Tengah Terangkat)
+                    if (fingers[1] && fingers[2]) {
+                        xp[i] = 0;
+                        yp[i] = 0;
+
+                        canvasCtx.beginPath();
+                        canvasCtx.arc(x1, y1, 15, 0, 2 * Math.PI);
+                        canvasCtx.fillStyle = drawColor;
+                        canvasCtx.fill();
+
+                        // Interaksi Menu
+                        if (y1 < 120) {
+                            headerRects.forEach(item => {
+                                const [rx1, ry1, rx2, ry2] = item.rect;
+                                if (x1 > rx1 && x1 < rx2 && y1 > ry1 && y1 < ry2) {
+                                    if (item.type === "color") drawColor = item.color;
+                                    else if (item.type === "eraser") drawColor = "#000000";
+                                    else if (item.label === "CLEAR") {
+                                        paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    // Mode Menggambar (Hanya Telunjuk Terangkat)
+                    else if (fingers[1] && !fingers[2]) {
+                        canvasCtx.beginPath();
+                        canvasCtx.arc(x1, y1, 10, 0, 2 * Math.PI);
+                        canvasCtx.fillStyle = drawColor;
+                        canvasCtx.fill();
+
+                        if (xp[i] === 0 && yp[i] === 0) {
+                            xp[i] = x1;
+                            yp[i] = y1;
+                        }
+
+                        paintCtx.beginPath();
+                        paintCtx.moveTo(xp[i], yp[i]);
+                        paintCtx.lineTo(x1, y1);
+
+                        if (drawColor === "#000000") {
+                            paintCtx.globalCompositeOperation = 'destination-out';
+                            paintCtx.lineWidth = eraserThickness;
+                        } else {
+                            paintCtx.globalCompositeOperation = 'source-over';
+                            paintCtx.strokeStyle = drawColor;
+                            paintCtx.lineWidth = brushThickness;
+                        }
+
+                        paintCtx.lineCap = 'round';
+                        paintCtx.stroke();
+
+                        xp[i] = x1;
+                        yp[i] = y1;
+                    } else {
+                        xp[i] = 0;
+                        yp[i] = 0;
+                    }
+                }
+            }
+        }
+
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({ image: videoElement });
+            },
+            width: 1280,
+            height: 720
+        });
+        camera.start();
+    </script>
+</body>
+
+</html>
