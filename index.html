@@ -4,25 +4,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Virtual Paint</title>
+    <title>Virtual Paint - AI Hand Tracking</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             margin: 0;
-            background-color: #121212;
-            color: white;
-            font-family: Arial, sans-serif;
+            padding: 15px 10px;
+            background: #090d16;
+            color: #f8fafc;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
+            min-height: 100vh;
         }
 
-        .container {
+        .main-layout {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        /* Container Canvas Minimalis */
+        .canvas-wrapper {
             position: relative;
-            width: 1280px;
-            height: 720px;
-            margin-top: 10px;
+            width: 100%;
+            max-width: 1280px;
+            aspect-ratio: 16 / 9;
+            background-color: #0f172a;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+            border: 1px solid #1e293b;
         }
 
         video,
@@ -30,24 +51,142 @@
             position: absolute;
             top: 0;
             left: 0;
-            width: 1280px;
-            height: 720px;
-            border-radius: 8px;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
 
-        /* Video disembunyikan, hasil digambar ke canvas */
         video {
             display: none;
+        }
+
+        /* Overlay Tombol Download (Hanya muncul jika sudah Take Foto) */
+        .top-right-actions {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 10;
+            display: none; /* Hidden by default until photo taken */
+            gap: 8px;
+        }
+
+        .icon-btn {
+            background: rgba(15, 23, 42, 0.85);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+            transition: all 0.2s ease;
+            font-size: 14px;
+        }
+
+        .icon-btn:hover {
+            background: rgba(30, 41, 59, 0.95);
+            border-color: #38bdf8;
+        }
+
+        /* Overlay Countdown (Warna Angka Putih) */
+        .countdown-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 110px;
+            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 0 0 20px rgba(0,0,0,0.8);
+            background: rgba(0, 0, 0, 0.3);
+            z-index: 15;
+            pointer-events: none;
+        }
+
+        /* Panel Rules Minimalis */
+        .instructions-card {
+            width: 100%;
+            background: #0f172a;
+            border-radius: 10px;
+            padding: 14px 18px;
+            border: 1px solid #1e293b;
+        }
+
+        .instructions-card h4 {
+            margin: 0 0 10px 0;
+            font-size: 0.95rem;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        .rules-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+        }
+
+        .rule-item {
+            background: #1e293b;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 0.83rem;
+            line-height: 1.35;
+            color: #cbd5e1;
+        }
+
+        .rule-item strong {
+            color: #f8fafc;
+        }
+
+        @media (max-width: 768px) {
+            .rules-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 
 <body>
 
-    <h2>Virtual Air Drawing (MediaPipe Web)</h2>
-    <div class="container">
-        <video id="webcam" autoplay playsinline></video>
-        <canvas id="output_canvas" width="1280" height="720"></canvas>
+    <div class="main-layout">
+        <div class="canvas-wrapper">
+            <video id="webcam" autoplay playsinline></video>
+            <canvas id="output_canvas" width="1280" height="720"></canvas>
+
+            <!-- Tombol Download Icon Pojok Kanan Atas (Tampil Hanya Setelah Take Foto) -->
+            <div class="top-right-actions" id="download_action_wrapper">
+                <button class="icon-btn" id="btn_download" title="Download Foto Snapshot">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                </button>
+            </div>
+
+            <!-- Overlay Countdown -->
+            <div class="countdown-overlay" id="countdown_text">3</div>
+        </div>
+
+        <div class="instructions-card">
+            <h4>Panduan Singkat</h4>
+            <div class="rules-grid">
+                <div class="rule-item">
+                    <strong>1. Kamera & Cahaya:</strong> Pastikan terang & tidak buram.
+                </div>
+                <div class="rule-item">
+                    <strong>2. Eraser & Clear:</strong> Gunakan <strong>2 jari (telunjuk + tengah)</strong> via Gesture.
+                </div>
+                <div class="rule-item">
+                    <strong>3. Mencoer / Melukis:</strong> Gunakan <strong>hanya jari telunjuk</strong>.
+                </div>
+                <div class="rule-item">
+                    <strong>4. Klik Manual:</strong> Pilih Warna, Undo, Redo, Take Foto & Retake via <strong>Klik Manual</strong>.
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -68,58 +207,273 @@
         // Multi-hand tracking state
         let xp = Array(10).fill(0);
         let yp = Array(10).fill(0);
+        let isDrawingState = Array(10).fill(false);
 
-        // Tombol UI
+        // Undo & Redo History Stack
+        let undoStack = [paintCtx.getImageData(0, 0, 1280, 720)];
+        let redoStack = [];
+
+        function pushUndoState() {
+            undoStack.push(paintCtx.getImageData(0, 0, 1280, 720));
+            if (undoStack.length > 10) {
+                undoStack.shift();
+            }
+            redoStack = [];
+        }
+
+        // State Take Foto & Freeze Canvas
+        let isCountingDown = false;
+        let isPhotoTaken = false;
+        let frozenCanvasImage = null;
+
+        // Header Buttons configuration
         const headerRects = [
-            { label: "RED", rect: [50, 20, 150, 100], color: "#FF0000", type: "color" },
-            { label: "GREEN", rect: [170, 20, 270, 100], color: "#00FF00", type: "color" },
-            { label: "BLUE", rect: [290, 20, 390, 100], color: "#0000FF", type: "color" },
-            { label: "YELLOW", rect: [410, 20, 510, 100], color: "#FFFF00", type: "color" },
-            { label: "ERASER", rect: [530, 20, 680, 100], color: "#FFFFFF", type: "eraser" },
-            { label: "CLEAR", rect: [700, 20, 850, 100], color: "#C83232", type: "action" }
+            { label: "", rect: [20, 20, 65, 80], color: "#FF0000", type: "manual_color" },
+            { label: "", rect: [75, 20, 120, 80], color: "#00FF00", type: "manual_color" },
+            { label: "", rect: [130, 20, 175, 80], color: "#0000FF", type: "manual_color" },
+            { label: "", rect: [185, 20, 230, 80], color: "#FFFF00", type: "manual_color" },
+            { label: "", rect: [240, 20, 285, 80], color: "#FF7F00", type: "manual_color" },
+            { label: "", rect: [295, 20, 340, 80], color: "#9B59B6", type: "manual_color" },
+            { label: "", rect: [351, 20, 395, 80], color: "#FF1493", type: "manual_color" },
+            { label: "ERASER", rect: [410, 20, 500, 80], color: "#FFFFFF", type: "gesture_eraser" },
+            { label: "UNDO", rect: [510, 20, 560, 80], color: "#64748B", type: "manual_undo" },
+            { label: "REDO", rect: [570, 20, 620, 80], color: "#64748B", type: "manual_redo" },
+            { label: "CLEAR", rect: [630, 20, 705, 80], color: "#DC2626", type: "gesture_clear" },
+            { label: "CAMERA", rect: [715, 20, 785, 80], color: "#0284C7", type: "manual_camera" }
         ];
 
+        // Draw Icon Undo / Redo
+        function drawUndoRedoIcon(ctx, cx, cy, isUndo) {
+            ctx.strokeStyle = "#FFFFFF";
+            ctx.lineWidth = 2.5;
+            ctx.fillStyle = "#FFFFFF";
+
+            ctx.beginPath();
+            if (isUndo) {
+                ctx.arc(cx + 2, cy + 2, 9, 1.2 * Math.PI, 0.4 * Math.PI, false);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(cx - 7, cy - 9);
+                ctx.lineTo(cx - 7, cy - 2);
+                ctx.lineTo(cx, cy - 7);
+                ctx.fill();
+            } else {
+                ctx.arc(cx - 2, cy + 2, 9, 0.6 * Math.PI, 1.8 * Math.PI, false);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(cx + 7, cy - 9);
+                ctx.lineTo(cx + 7, cy - 2);
+                ctx.lineTo(cx, cy - 7);
+                ctx.fill();
+            }
+        }
+
+        // Draw Checklist Icon pada warna aktif
+        function drawCheckmark(ctx, cx, cy) {
+            ctx.strokeStyle = "#FFFFFF";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(cx - 5, cy);
+            ctx.lineTo(cx - 1, cy + 5);
+            ctx.lineTo(cx + 6, cy - 5);
+            ctx.stroke();
+        }
+
+        // Draw Icon Kamera & Retake
+        function drawCameraIcon(ctx, cx, cy, isRetake) {
+            ctx.strokeStyle = "#FFFFFF";
+            ctx.fillStyle = "#FFFFFF";
+            ctx.lineWidth = 2;
+
+            if (!isRetake) {
+                ctx.beginPath();
+                ctx.roundRect(cx - 12, cy - 8, 24, 18, 3);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(cx, cy, 5, 0, 2 * Math.PI);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.rect(cx - 5, cy - 12, 10, 4);
+                ctx.fill();
+            } else {
+                ctx.beginPath();
+                ctx.arc(cx, cy, 10, 0.2 * Math.PI, 1.7 * Math.PI);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(cx + 8, cy - 10);
+                ctx.lineTo(cx + 12, cy - 4);
+                ctx.lineTo(cx + 5, cy - 4);
+                ctx.fill();
+            }
+        }
+
         function drawHeader(ctx) {
-            ctx.fillStyle = "rgb(30, 30, 30)";
-            ctx.fillRect(0, 0, 1280, 120);
+            ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+            ctx.fillRect(0, 0, 1280, 100);
 
             headerRects.forEach(item => {
+                // Sembunyikan Undo & Redo saat sedang Take Foto / Freeze Foto
+                if (isPhotoTaken && (item.type === "manual_undo" || item.type === "manual_redo")) {
+                    return;
+                }
+
                 const [x1, y1, x2, y2] = item.rect;
                 ctx.fillStyle = item.color;
-                ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+                const cx = (x1 + x2) / 2;
+                const cy = (y1 + y2) / 2;
 
-                ctx.fillStyle = item.type === "eraser" ? "#000000" : "#FFFFFF";
-                ctx.font = "bold 20px Arial";
-                ctx.fillText(item.label, x1 + 15, y1 + 50);
+                if (item.type === "manual_color") {
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 18, 0, 2 * Math.PI);
+                    ctx.fill();
+
+                    if (drawColor === item.color) {
+                        ctx.strokeStyle = "#FFFFFF";
+                        ctx.lineWidth = 3;
+                        ctx.stroke();
+                        drawCheckmark(ctx, cx, cy);
+                    }
+                } else if (item.type === "manual_undo" || item.type === "manual_redo") {
+                    ctx.beginPath();
+                    ctx.roundRect(x1, y1, x2 - x1, y2 - y1, 8);
+                    ctx.fill();
+                    drawUndoRedoIcon(ctx, cx, cy, item.type === "manual_undo");
+                } else if (item.type === "manual_camera") {
+                    ctx.fillStyle = isPhotoTaken ? "#D97706" : "#0284C7";
+                    ctx.beginPath();
+                    ctx.roundRect(x1, y1, x2 - x1, y2 - y1, 8);
+                    ctx.fill();
+                    drawCameraIcon(ctx, cx, cy, isPhotoTaken);
+                } else {
+                    // Eraser & Clear
+                    ctx.beginPath();
+                    ctx.roundRect(x1, y1, x2 - x1, y2 - y1, 8);
+                    ctx.fill();
+
+                    ctx.fillStyle = item.type === "gesture_eraser" ? "#000000" : "#FFFFFF";
+                    ctx.font = "bold 14px sans-serif";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(item.label, cx, cy);
+                    ctx.textAlign = "start";
+                }
             });
         }
 
         function checkFingersUp(landmarks) {
             const tipIds = [4, 8, 12, 16, 20];
             let fingers = [];
-
-            // Ibu Jari
             fingers.push(landmarks[tipIds[0]].x < landmarks[tipIds[0] - 1].x ? 1 : 0);
-
-            // 4 Jari lainnya
             for (let i = 1; i < 5; i++) {
                 fingers.push(landmarks[tipIds[i]].y < landmarks[tipIds[i] - 2].y ? 1 : 0);
             }
             return fingers;
         }
 
+        let lastActionTime = 0;
+
+        function triggerCameraOrRetake() {
+            if (isCountingDown) return;
+
+            if (isPhotoTaken) {
+                isPhotoTaken = false;
+                frozenCanvasImage = null;
+                document.getElementById('download_action_wrapper').style.display = 'none';
+                return;
+            }
+
+            isCountingDown = true;
+            const countdownOverlay = document.getElementById('countdown_text');
+            countdownOverlay.style.display = 'flex';
+            let count = 3;
+            countdownOverlay.innerText = count;
+
+            const timer = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownOverlay.innerText = count;
+                } else {
+                    clearInterval(timer);
+                    countdownOverlay.style.display = 'none';
+                    isCountingDown = false;
+                    capturePhotoDirectly();
+                }
+            }, 1000);
+        }
+
+        function capturePhotoDirectly() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 1280;
+            tempCanvas.height = 720;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            tempCtx.translate(1280, 0);
+            tempCtx.scale(-1, 1);
+            tempCtx.drawImage(videoElement, 0, 0, 1280, 720);
+            tempCtx.restore();
+
+            tempCtx.drawImage(paintCanvas, 0, 0);
+
+            frozenCanvasImage = tempCanvas;
+            isPhotoTaken = true;
+
+            document.getElementById('download_action_wrapper').style.display = 'flex';
+        }
+
+        function downloadImage(dataUrl, filename = 'virtual_paint.png') {
+            const link = document.createElement('a');
+            link.href = dataUrl;
+            link.download = filename;
+            link.click();
+        }
+
+        // Event listener KLIK MANUAL MOUSE pada canvas untuk: WARNA, UNDO, REDO, CAMERA/RETAKE
+        canvasElement.addEventListener('click', (e) => {
+            const rect = canvasElement.getBoundingClientRect();
+            const scaleX = canvasElement.width / rect.width;
+            const scaleY = canvasElement.height / rect.height;
+            const clickX = (e.clientX - rect.left) * scaleX;
+            const clickY = (e.clientY - rect.top) * scaleY;
+
+            if (clickY <= 100) {
+                headerRects.forEach(item => {
+                    const [rx1, ry1, rx2, ry2] = item.rect;
+                    if (clickX >= rx1 && clickX <= rx2 && clickY >= ry1 && clickY <= ry2) {
+                        if (item.type === "manual_color") {
+                            drawColor = item.color;
+                        } else if (item.type === "manual_camera") {
+                            triggerCameraOrRetake();
+                        } else if (!isPhotoTaken && item.type === "manual_undo") {
+                            if (undoStack.length > 1) {
+                                redoStack.push(undoStack.pop());
+                                paintCtx.putImageData(undoStack[undoStack.length - 1], 0, 0);
+                            }
+                        } else if (!isPhotoTaken && item.type === "manual_redo") {
+                            if (redoStack.length > 0) {
+                                const state = redoStack.pop();
+                                undoStack.push(state);
+                                paintCtx.putImageData(state, 0, 0);
+                            }
+                        }
+                    }
+                });
+            }
+        });
+
         function onResults(results) {
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-            // Gambar mirror dari webcam
-            canvasCtx.translate(canvasElement.width, 0);
-            canvasCtx.scale(-1, 1);
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.restore();
+            if (isPhotoTaken && frozenCanvasImage) {
+                canvasCtx.drawImage(frozenCanvasImage, 0, 0);
+            } else {
+                canvasCtx.translate(canvasElement.width, 0);
+                canvasCtx.scale(-1, 1);
+                canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                canvasCtx.restore();
 
-            // Gabungkan gambar kanvas coretan
-            canvasCtx.drawImage(paintCanvas, 0, 0);
+                canvasCtx.drawImage(paintCanvas, 0, 0);
+            }
 
             // Gambar Header UI
             drawHeader(canvasCtx);
@@ -129,38 +483,51 @@
                     const landmarks = results.multiHandLandmarks[i];
                     const fingers = checkFingersUp(landmarks);
 
-                    // Posisi Telunjuk (di-mirror)
                     const x1 = Math.floor((1 - landmarks[8].x) * canvasElement.width);
                     const y1 = Math.floor(landmarks[8].y * canvasElement.height);
 
-                    // Mode Seleksi (Telunjuk & Tengah Terangkat)
+                    // Mode Seleksi (Telunjuk & Tengah Terangkat) - HANYA UNTUK GESTURE ERASER DAN CLEAR
                     if (fingers[1] && fingers[2]) {
+                        if (isDrawingState[i]) {
+                            pushUndoState();
+                            isDrawingState[i] = false;
+                        }
+
                         xp[i] = 0;
                         yp[i] = 0;
 
                         canvasCtx.beginPath();
-                        canvasCtx.arc(x1, y1, 15, 0, 2 * Math.PI);
+                        canvasCtx.arc(x1, y1, 12, 0, 2 * Math.PI);
                         canvasCtx.fillStyle = drawColor;
                         canvasCtx.fill();
 
-                        // Interaksi Menu
-                        if (y1 < 120) {
+                        // Interaksi GESTURE: HANYA ERASER & CLEAR
+                        if (y1 < 100) {
                             headerRects.forEach(item => {
                                 const [rx1, ry1, rx2, ry2] = item.rect;
                                 if (x1 > rx1 && x1 < rx2 && y1 > ry1 && y1 < ry2) {
-                                    if (item.type === "color") drawColor = item.color;
-                                    else if (item.type === "eraser") drawColor = "#000000";
-                                    else if (item.label === "CLEAR") {
+                                    if (item.type === "gesture_eraser") {
+                                        drawColor = "#000000";
+                                    } else if (item.type === "gesture_clear" && (Date.now() - lastActionTime) > 1000) {
+                                        lastActionTime = Date.now();
                                         paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+                                        pushUndoState();
+                                        isPhotoTaken = false;
+                                        frozenCanvasImage = null;
+                                        document.getElementById('download_action_wrapper').style.display = 'none';
                                     }
                                 }
                             });
                         }
                     }
-                    // Mode Menggambar (Hanya Telunjuk Terangkat)
-                    else if (fingers[1] && !fingers[2]) {
+                    // Mode Menggambar (Hanya Telunjuk Terangkat, tidak aktif saat foto di-freeze)
+                    else if (fingers[1] && !fingers[2] && !isPhotoTaken) {
+                        if (!isDrawingState[i]) {
+                            isDrawingState[i] = true;
+                        }
+
                         canvasCtx.beginPath();
-                        canvasCtx.arc(x1, y1, 10, 0, 2 * Math.PI);
+                        canvasCtx.arc(x1, y1, 8, 0, 2 * Math.PI);
                         canvasCtx.fillStyle = drawColor;
                         canvasCtx.fill();
 
@@ -188,12 +555,23 @@
                         xp[i] = x1;
                         yp[i] = y1;
                     } else {
+                        if (isDrawingState[i]) {
+                            pushUndoState();
+                            isDrawingState[i] = false;
+                        }
                         xp[i] = 0;
                         yp[i] = 0;
                     }
                 }
             }
         }
+
+        // Event Listener Tombol Download Pojok Kanan Atas
+        document.getElementById('btn_download').addEventListener('click', () => {
+            if (frozenCanvasImage) {
+                downloadImage(frozenCanvasImage.toDataURL('image/png'), `virtual_paint_photo_${Date.now()}.png`);
+            }
+        });
 
         const hands = new Hands({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
@@ -220,3 +598,8 @@
 </body>
 
 </html>
+
+
+
+
+
