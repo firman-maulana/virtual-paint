@@ -3,47 +3,92 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Virtual Paint - AI Hand Tracking</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <style>
         * {
             box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            margin: 0;
-            padding: 15px 10px;
             background: #090d16;
             color: #f8fafc;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             display: flex;
             flex-direction: column;
-            align-items: center;
             min-height: 100vh;
+            min-height: 100dvh;
+            overflow-x: hidden;
+            overflow-y: auto;
         }
 
         .main-layout {
             display: flex;
             flex-direction: column;
-            align-items: center;
-            gap: 15px;
             width: 100%;
+            min-height: 100vh;
+            min-height: 100dvh;
             max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
         }
 
-        /* Container Canvas Minimalis */
+        /* Content Container Scrollable */
+        .content-scrollable {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            gap: 15px;
+            padding-bottom: 15px;
+        }
+
+        /* Container Live View Flexibel & Proporsional */
+        .canvas-container {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #0b0f19;
+            padding: 8px;
+            position: relative;
+        }
+
         .canvas-wrapper {
             position: relative;
             width: 100%;
             max-width: 1280px;
-            aspect-ratio: 16 / 9;
-            background-color: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             border-radius: 12px;
             overflow: hidden;
+            background-color: #0f172a;
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
             border: 1px solid #1e293b;
+
+            /* Default Aspect Ratio (Landscape untuk PC / Layar Lebar) */
+            aspect-ratio: 16 / 9;
+            max-height: 75vh;
+        }
+
+        /* Dynamic Aspect Ratio untuk Mobile (Portrait) */
+        @media (max-width: 768px) and (orientation: portrait) {
+            .canvas-wrapper {
+                aspect-ratio: 3 / 4;
+                max-height: 70vh;
+            }
+        }
+
+        @media (max-width: 480px) and (orientation: portrait) {
+            .canvas-wrapper {
+                aspect-ratio: 9 / 16;
+                max-height: 65vh;
+            }
         }
 
         video,
@@ -53,20 +98,60 @@
             left: 0;
             width: 100%;
             height: 100%;
-            object-fit: contain;
+            object-fit: cover;
         }
 
         video {
             display: none;
         }
 
-        /* Overlay Tombol Download (Hanya muncul jika sudah Take Foto) */
+        /* Loading Spinner Overlay */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.92);
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            color: #f8fafc;
+            transition: opacity 0.3s ease;
+        }
+
+        .spinner {
+            width: 46px;
+            height: 46px;
+            border: 4px solid rgba(56, 189, 248, 0.2);
+            border-top-color: #38bdf8;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading-text {
+            font-size: 14px;
+            font-weight: 500;
+            color: #94a3b8;
+            letter-spacing: 0.5px;
+        }
+
+        /* Overlay Tombol Download */
         .top-right-actions {
             position: absolute;
-            top: 12px;
-            right: 12px;
-            z-index: 10;
-            display: none; /* Hidden by default until photo taken */
+            top: 16px;
+            right: 16px;
+            z-index: 20;
+            display: none;
             gap: 8px;
         }
 
@@ -74,23 +159,25 @@
             background: rgba(15, 23, 42, 0.85);
             color: #ffffff;
             border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            padding: 8px 12px;
+            border-radius: 10px;
+            width: 42px;
+            height: 42px;
+            padding: 0;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             backdrop-filter: blur(4px);
             transition: all 0.2s ease;
-            font-size: 14px;
         }
 
         .icon-btn:hover {
             background: rgba(30, 41, 59, 0.95);
             border-color: #38bdf8;
+            transform: scale(1.05);
         }
 
-        /* Overlay Countdown (Warna Angka Putih) */
+        /* Overlay Countdown */
         .countdown-overlay {
             position: absolute;
             top: 0;
@@ -100,51 +187,158 @@
             display: none;
             align-items: center;
             justify-content: center;
-            font-size: 110px;
+            font-size: 90px;
             font-weight: bold;
             color: #ffffff;
             text-shadow: 0 0 20px rgba(0,0,0,0.8);
             background: rgba(0, 0, 0, 0.3);
-            z-index: 15;
+            z-index: 25;
             pointer-events: none;
         }
 
-        /* Panel Rules Minimalis */
+        /* Section Peraturan Bermain */
         .instructions-card {
             width: 100%;
             background: #0f172a;
-            border-radius: 10px;
-            padding: 14px 18px;
+            border-radius: 12px;
+            padding: 16px 20px;
             border: 1px solid #1e293b;
+            margin: 0 auto;
+            max-width: calc(100% - 16px);
         }
 
-        .instructions-card h4 {
-            margin: 0 0 10px 0;
-            font-size: 0.95rem;
-            color: #94a3b8;
-            font-weight: 600;
+        .instructions-card h3 {
+            margin-bottom: 12px;
+            font-size: 1.05rem;
+            color: #38bdf8;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .rules-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 10px;
+            gap: 12px;
         }
 
         .rule-item {
             background: #1e293b;
-            padding: 10px 14px;
-            border-radius: 6px;
-            font-size: 0.83rem;
-            line-height: 1.35;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.88rem;
+            line-height: 1.4;
             color: #cbd5e1;
+            border-left: 3px solid #0284c7;
         }
 
         .rule-item strong {
             color: #f8fafc;
         }
 
-        @media (max-width: 768px) {
+        /* Toolbar Sticky di Bawah */
+        .bottom-toolbar-container {
+            position: sticky;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            z-index: 30;
+            background: #0f172a;
+            border-top: 1px solid #1e293b;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .tool-btn-icon {
+            background: #1e293b;
+            color: #f8fafc;
+            border: 1px solid #334155;
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .tool-btn-icon:hover {
+            background: #334155;
+            border-color: #38bdf8;
+        }
+
+        .tool-btn-icon:active {
+            transform: scale(0.92);
+        }
+
+        .tool-btn-icon.active {
+            border-color: #38bdf8;
+            background: #0284c7;
+            color: #ffffff;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+        }
+
+        .color-dot {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: transform 0.15s ease;
+            display: inline-block;
+        }
+
+        .color-dot.active {
+            border-color: #ffffff;
+            transform: scale(1.18);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+        }
+
+        .color-palette {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #1e293b;
+            padding: 8px 12px;
+            border-radius: 24px;
+            border: 1px solid #334155;
+        }
+
+        .divider {
+            width: 1px;
+            height: 26px;
+            background: #334155;
+            margin: 0 2px;
+        }
+
+        @media (max-width: 600px) {
+            .tool-btn-icon {
+                width: 38px;
+                height: 38px;
+            }
+            .color-dot {
+                width: 20px;
+                height: 20px;
+            }
+            .color-palette {
+                padding: 6px 10px;
+                gap: 6px;
+            }
             .rules-grid {
                 grid-template-columns: 1fr;
             }
@@ -155,36 +349,100 @@
 <body>
 
     <div class="main-layout">
-        <div class="canvas-wrapper">
-            <video id="webcam" autoplay playsinline></video>
-            <canvas id="output_canvas" width="1280" height="720"></canvas>
+        <div class="content-scrollable">
+            <!-- Section Live View Kamera/Canvas -->
+            <div class="canvas-container">
+                <div class="canvas-wrapper" id="canvas_wrapper">
+                    <!-- Loading Indicator Overlay -->
+                    <div class="loading-overlay" id="loading_overlay">
+                        <div class="spinner"></div>
+                        <div class="loading-text">Memuat Kamera...</div>
+                    </div>
 
-            <!-- Tombol Download Icon Pojok Kanan Atas (Tampil Hanya Setelah Take Foto) -->
-            <div class="top-right-actions" id="download_action_wrapper">
-                <button class="icon-btn" id="btn_download" title="Download Foto Snapshot">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                </button>
+                    <video id="webcam" autoplay playsinline></video>
+                    <canvas id="output_canvas"></canvas>
+
+                    <!-- Tombol Download Snapshot (Icon Only) -->
+                    <div class="top-right-actions" id="download_action_wrapper">
+                        <button class="icon-btn" id="btn_download" title="Unduh Foto Snapshot">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        </button>
+                    </div>
+
+                    <!-- Overlay Countdown -->
+                    <div class="countdown-overlay" id="countdown_text">3</div>
+                </div>
             </div>
 
-            <!-- Overlay Countdown -->
-            <div class="countdown-overlay" id="countdown_text">3</div>
+            <!-- Section Peraturan Bermain -->
+            <div class="instructions-card">
+                <h3>Peraturan & Cara Bermain</h3>
+                <div class="rules-grid">
+                    <div class="rule-item">
+                        <strong>1. Pencahayaan Kamera:</strong> Pastikan ruangan terang & tangan terlihat jelas oleh kamera.
+                    </div>
+                    <div class="rule-item">
+                        <strong>2. Melukis / Menggambar:</strong> Pilih warna melalui toolbar, Angkat <strong>hanya 1 Jari Telunjuk</strong> untuk mulai melukis di layar.
+                    </div>
+                    <div class="rule-item">
+                        <strong>3. Mode Penghapus (Eraser):</strong> Tekan tombol Eraser. <strong>Arahkan jari telunjuk ke area yang ingin di hapus</strong>
+                    </div>
+                    <div class="rule-item">
+                        <strong>4. Clear Coretan:</strong> Klik tombol clear untuk menghapus semua coretan yang ada pada canvas
+                    </div>
+                    <div class="rule-item">
+                        <strong>5. Take Picture:</strong> Klik tombol take picture untuk mengambil foto, dan lakukan retake jika tidak puas
+                    </div>
+                    <div class="rule-item">
+                        <strong>6. Download Foto:</strong> Klik tombol download untuk mengunduh foto
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="instructions-card">
-            <h4>Panduan Singkat</h4>
-            <div class="rules-grid">
-                <div class="rule-item">
-                    <strong>1. Kamera & Cahaya:</strong> Pastikan terang & tidak buram.
+        <!-- Section Controls / Toolbar Sticky di Bawah (Icon-Only Buttons) -->
+        <div class="bottom-toolbar-container">
+            <div class="toolbar">
+                <!-- Color Palette Buttons -->
+                <div class="color-palette" id="color_palette">
+                    <span class="color-dot active" data-color="#00FF00" style="background: #00FF00;" title="Hijau"></span>
+                    <span class="color-dot" data-color="#FF0000" style="background: #FF0000;" title="Merah"></span>
+                    <span class="color-dot" data-color="#0000FF" style="background: #0000FF;" title="Biru"></span>
+                    <span class="color-dot" data-color="#FFFF00" style="background: #FFFF00;" title="Kuning"></span>
+                    <span class="color-dot" data-color="#FF7F00" style="background: #FF7F00;" title="Oranye"></span>
+                    <span class="color-dot" data-color="#9B59B6" style="background: #9B59B6;" title="Ungu"></span>
+                    <span class="color-dot" data-color="#FF1493" style="background: #FF1493;" title="Pink"></span>
                 </div>
-                <div class="rule-item">
-                    <strong>2. Eraser & Clear:</strong> Gunakan <strong>2 jari (telunjuk + tengah)</strong> via Gesture.
-                </div>
-                <div class="rule-item">
-                    <strong>3. Mencoer / Melukis:</strong> Gunakan <strong>hanya jari telunjuk</strong>.
-                </div>
-                <div class="rule-item">
-                    <strong>4. Klik Manual:</strong> Pilih Warna, Undo, Redo, Take Foto & Retake via <strong>Klik Manual</strong>.
-                </div>
+
+                <div class="divider"></div>
+
+                <!-- Action Tools (Icon Only) -->
+                <!-- Eraser Icon -->
+                <button class="tool-btn-icon" id="btn_eraser" title="Penghapus (Eraser)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+                </button>
+
+                <!-- Undo Icon -->
+                <button class="tool-btn-icon" id="btn_undo" title="Urungkan (Undo)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"></path></svg>
+                </button>
+
+                <!-- Redo Icon -->
+                <button class="tool-btn-icon" id="btn_redo" title="Ulangi (Redo)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"></path><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"></path></svg>
+                </button>
+
+                <!-- Clear Icon -->
+                <button class="tool-btn-icon" id="btn_clear" title="Hapus Semua (Clear Canvas)" style="background: #991b1b; border-color: #dc2626;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                </button>
+
+                <!-- Camera / Retake Icon -->
+                <button class="tool-btn-icon" id="btn_camera" title="Ambil Foto Snapshot" style="background: #0284c7; border-color: #38bdf8;">
+                    <span id="camera_icon_inner">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>
+                    </span>
+                </button>
             </div>
         </div>
     </div>
@@ -192,13 +450,43 @@
     <script>
         const videoElement = document.getElementById('webcam');
         const canvasElement = document.getElementById('output_canvas');
-        const canvasCtx = canvasElement.getContext('2d');
+        const canvasCtx = canvasElement.getContext('2d', { alpha: false });
+        const loadingOverlay = document.getElementById('loading_overlay');
+
+        // SVG Icons untuk Toggle Kamera / Retake
+        const cameraIconSVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path><circle cx="12" cy="13" r="3"></circle></svg>`;
+        const retakeIconSVG = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 16h5v5"></path></svg>`;
 
         // Canvas terpisah untuk coretan (Persistent Drawing)
         const paintCanvas = document.createElement('canvas');
-        paintCanvas.width = 1280;
-        paintCanvas.height = 720;
         const paintCtx = paintCanvas.getContext('2d');
+
+        function updateCanvasDimensions() {
+            const isMobilePortrait = window.innerWidth <= 768 && window.innerHeight > window.innerWidth;
+            const w = isMobilePortrait ? 720 : 1280;
+            const h = isMobilePortrait ? 1280 : 720;
+
+            if (canvasElement.width !== w || canvasElement.height !== h) {
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = paintCanvas.width;
+                tempCanvas.height = paintCanvas.height;
+                if (tempCanvas.width > 0 && tempCanvas.height > 0) {
+                    tempCanvas.getContext('2d').drawImage(paintCanvas, 0, 0);
+                }
+
+                canvasElement.width = w;
+                canvasElement.height = h;
+                paintCanvas.width = w;
+                paintCanvas.height = h;
+
+                if (tempCanvas.width > 0 && tempCanvas.height > 0) {
+                    paintCtx.drawImage(tempCanvas, 0, 0, tempCanvas.width, tempCanvas.height, 0, 0, w, h);
+                }
+            }
+        }
+
+        updateCanvasDimensions();
+        window.addEventListener('resize', updateCanvasDimensions);
 
         let drawColor = '#00FF00';
         let brushThickness = 15;
@@ -210,12 +498,12 @@
         let isDrawingState = Array(10).fill(false);
 
         // Undo & Redo History Stack
-        let undoStack = [paintCtx.getImageData(0, 0, 1280, 720)];
+        let undoStack = [paintCtx.getImageData(0, 0, paintCanvas.width, paintCanvas.height)];
         let redoStack = [];
 
         function pushUndoState() {
-            undoStack.push(paintCtx.getImageData(0, 0, 1280, 720));
-            if (undoStack.length > 10) {
+            undoStack.push(paintCtx.getImageData(0, 0, paintCanvas.width, paintCanvas.height));
+            if (undoStack.length > 8) {
                 undoStack.shift();
             }
             redoStack = [];
@@ -225,140 +513,53 @@
         let isCountingDown = false;
         let isPhotoTaken = false;
         let frozenCanvasImage = null;
+        let isLiveViewLoaded = false;
 
-        // Header Buttons configuration
-        const headerRects = [
-            { label: "", rect: [20, 20, 65, 80], color: "#FF0000", type: "manual_color" },
-            { label: "", rect: [75, 20, 120, 80], color: "#00FF00", type: "manual_color" },
-            { label: "", rect: [130, 20, 175, 80], color: "#0000FF", type: "manual_color" },
-            { label: "", rect: [185, 20, 230, 80], color: "#FFFF00", type: "manual_color" },
-            { label: "", rect: [240, 20, 285, 80], color: "#FF7F00", type: "manual_color" },
-            { label: "", rect: [295, 20, 340, 80], color: "#9B59B6", type: "manual_color" },
-            { label: "", rect: [351, 20, 395, 80], color: "#FF1493", type: "manual_color" },
-            { label: "ERASER", rect: [410, 20, 500, 80], color: "#FFFFFF", type: "gesture_eraser" },
-            { label: "UNDO", rect: [510, 20, 560, 80], color: "#64748B", type: "manual_undo" },
-            { label: "REDO", rect: [570, 20, 620, 80], color: "#64748B", type: "manual_redo" },
-            { label: "CLEAR", rect: [630, 20, 705, 80], color: "#DC2626", type: "gesture_clear" },
-            { label: "CAMERA", rect: [715, 20, 785, 80], color: "#0284C7", type: "manual_camera" }
-        ];
-
-        // Draw Icon Undo / Redo
-        function drawUndoRedoIcon(ctx, cx, cy, isUndo) {
-            ctx.strokeStyle = "#FFFFFF";
-            ctx.lineWidth = 2.5;
-            ctx.fillStyle = "#FFFFFF";
-
-            ctx.beginPath();
-            if (isUndo) {
-                ctx.arc(cx + 2, cy + 2, 9, 1.2 * Math.PI, 0.4 * Math.PI, false);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(cx - 7, cy - 9);
-                ctx.lineTo(cx - 7, cy - 2);
-                ctx.lineTo(cx, cy - 7);
-                ctx.fill();
-            } else {
-                ctx.arc(cx - 2, cy + 2, 9, 0.6 * Math.PI, 1.8 * Math.PI, false);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(cx + 7, cy - 9);
-                ctx.lineTo(cx + 7, cy - 2);
-                ctx.lineTo(cx, cy - 7);
-                ctx.fill();
-            }
-        }
-
-        // Draw Checklist Icon pada warna aktif
-        function drawCheckmark(ctx, cx, cy) {
-            ctx.strokeStyle = "#FFFFFF";
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(cx - 5, cy);
-            ctx.lineTo(cx - 1, cy + 5);
-            ctx.lineTo(cx + 6, cy - 5);
-            ctx.stroke();
-        }
-
-        // Draw Icon Kamera & Retake
-        function drawCameraIcon(ctx, cx, cy, isRetake) {
-            ctx.strokeStyle = "#FFFFFF";
-            ctx.fillStyle = "#FFFFFF";
-            ctx.lineWidth = 2;
-
-            if (!isRetake) {
-                ctx.beginPath();
-                ctx.roundRect(cx - 12, cy - 8, 24, 18, 3);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.arc(cx, cy, 5, 0, 2 * Math.PI);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.rect(cx - 5, cy - 12, 10, 4);
-                ctx.fill();
-            } else {
-                ctx.beginPath();
-                ctx.arc(cx, cy, 10, 0.2 * Math.PI, 1.7 * Math.PI);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(cx + 8, cy - 10);
-                ctx.lineTo(cx + 12, cy - 4);
-                ctx.lineTo(cx + 5, cy - 4);
-                ctx.fill();
-            }
-        }
-
-        function drawHeader(ctx) {
-            ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
-            ctx.fillRect(0, 0, 1280, 100);
-
-            headerRects.forEach(item => {
-                // Sembunyikan Undo & Redo saat sedang Take Foto / Freeze Foto
-                if (isPhotoTaken && (item.type === "manual_undo" || item.type === "manual_redo")) {
-                    return;
-                }
-
-                const [x1, y1, x2, y2] = item.rect;
-                ctx.fillStyle = item.color;
-                const cx = (x1 + x2) / 2;
-                const cy = (y1 + y2) / 2;
-
-                if (item.type === "manual_color") {
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, 18, 0, 2 * Math.PI);
-                    ctx.fill();
-
-                    if (drawColor === item.color) {
-                        ctx.strokeStyle = "#FFFFFF";
-                        ctx.lineWidth = 3;
-                        ctx.stroke();
-                        drawCheckmark(ctx, cx, cy);
-                    }
-                } else if (item.type === "manual_undo" || item.type === "manual_redo") {
-                    ctx.beginPath();
-                    ctx.roundRect(x1, y1, x2 - x1, y2 - y1, 8);
-                    ctx.fill();
-                    drawUndoRedoIcon(ctx, cx, cy, item.type === "manual_undo");
-                } else if (item.type === "manual_camera") {
-                    ctx.fillStyle = isPhotoTaken ? "#D97706" : "#0284C7";
-                    ctx.beginPath();
-                    ctx.roundRect(x1, y1, x2 - x1, y2 - y1, 8);
-                    ctx.fill();
-                    drawCameraIcon(ctx, cx, cy, isPhotoTaken);
-                } else {
-                    // Eraser & Clear
-                    ctx.beginPath();
-                    ctx.roundRect(x1, y1, x2 - x1, y2 - y1, 8);
-                    ctx.fill();
-
-                    ctx.fillStyle = item.type === "gesture_eraser" ? "#000000" : "#FFFFFF";
-                    ctx.font = "bold 14px sans-serif";
-                    ctx.textAlign = "center";
-                    ctx.textBaseline = "middle";
-                    ctx.fillText(item.label, cx, cy);
-                    ctx.textAlign = "start";
-                }
+        // UI Toolbar Elements Event Handler
+        const colorDots = document.querySelectorAll('.color-dot');
+        colorDots.forEach(dot => {
+            dot.addEventListener('click', () => {
+                colorDots.forEach(d => d.classList.remove('active'));
+                dot.classList.add('active');
+                drawColor = dot.getAttribute('data-color');
+                document.getElementById('btn_eraser').classList.remove('active');
             });
-        }
+        });
+
+        document.getElementById('btn_eraser').addEventListener('click', () => {
+            drawColor = "#000000";
+            colorDots.forEach(d => d.classList.remove('active'));
+            document.getElementById('btn_eraser').classList.add('active');
+        });
+
+        document.getElementById('btn_undo').addEventListener('click', () => {
+            if (!isPhotoTaken && undoStack.length > 1) {
+                redoStack.push(undoStack.pop());
+                paintCtx.putImageData(undoStack[undoStack.length - 1], 0, 0);
+            }
+        });
+
+        document.getElementById('btn_redo').addEventListener('click', () => {
+            if (!isPhotoTaken && redoStack.length > 0) {
+                const state = redoStack.pop();
+                undoStack.push(state);
+                paintCtx.putImageData(state, 0, 0);
+            }
+        });
+
+        document.getElementById('btn_clear').addEventListener('click', () => {
+            paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+            pushUndoState();
+            if (isPhotoTaken) {
+                isPhotoTaken = false;
+                frozenCanvasImage = null;
+                document.getElementById('download_action_wrapper').style.display = 'none';
+                document.getElementById('camera_icon_inner').innerHTML = cameraIconSVG;
+                document.getElementById('btn_camera').title = "Ambil Foto Snapshot";
+            }
+        });
+
+        document.getElementById('btn_camera').addEventListener('click', triggerCameraOrRetake);
 
         function checkFingersUp(landmarks) {
             const tipIds = [4, 8, 12, 16, 20];
@@ -379,6 +580,8 @@
                 isPhotoTaken = false;
                 frozenCanvasImage = null;
                 document.getElementById('download_action_wrapper').style.display = 'none';
+                document.getElementById('camera_icon_inner').innerHTML = cameraIconSVG;
+                document.getElementById('btn_camera').title = "Ambil Foto Snapshot";
                 return;
             }
 
@@ -403,21 +606,26 @@
 
         function capturePhotoDirectly() {
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = 1280;
-            tempCanvas.height = 720;
+            tempCanvas.width = canvasElement.width;
+            tempCanvas.height = canvasElement.height;
             const tempCtx = tempCanvas.getContext('2d');
 
-            tempCtx.translate(1280, 0);
+            // Draw video feed mirrored to match live view appearance
+            tempCtx.save();
+            tempCtx.translate(canvasElement.width, 0);
             tempCtx.scale(-1, 1);
-            tempCtx.drawImage(videoElement, 0, 0, 1280, 720);
+            tempCtx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
             tempCtx.restore();
 
+            // Draw paintCanvas directly (because paintCanvas points were drawn in mirrored coordinates matching live view)
             tempCtx.drawImage(paintCanvas, 0, 0);
 
             frozenCanvasImage = tempCanvas;
             isPhotoTaken = true;
 
             document.getElementById('download_action_wrapper').style.display = 'flex';
+            document.getElementById('camera_icon_inner').innerHTML = retakeIconSVG;
+            document.getElementById('btn_camera').title = "Ambil Ulang Foto (Retake)";
         }
 
         function downloadImage(dataUrl, filename = 'virtual_paint.png') {
@@ -427,40 +635,17 @@
             link.click();
         }
 
-        // Event listener KLIK MANUAL MOUSE pada canvas untuk: WARNA, UNDO, REDO, CAMERA/RETAKE
-        canvasElement.addEventListener('click', (e) => {
-            const rect = canvasElement.getBoundingClientRect();
-            const scaleX = canvasElement.width / rect.width;
-            const scaleY = canvasElement.height / rect.height;
-            const clickX = (e.clientX - rect.left) * scaleX;
-            const clickY = (e.clientY - rect.top) * scaleY;
-
-            if (clickY <= 100) {
-                headerRects.forEach(item => {
-                    const [rx1, ry1, rx2, ry2] = item.rect;
-                    if (clickX >= rx1 && clickX <= rx2 && clickY >= ry1 && clickY <= ry2) {
-                        if (item.type === "manual_color") {
-                            drawColor = item.color;
-                        } else if (item.type === "manual_camera") {
-                            triggerCameraOrRetake();
-                        } else if (!isPhotoTaken && item.type === "manual_undo") {
-                            if (undoStack.length > 1) {
-                                redoStack.push(undoStack.pop());
-                                paintCtx.putImageData(undoStack[undoStack.length - 1], 0, 0);
-                            }
-                        } else if (!isPhotoTaken && item.type === "manual_redo") {
-                            if (redoStack.length > 0) {
-                                const state = redoStack.pop();
-                                undoStack.push(state);
-                                paintCtx.putImageData(state, 0, 0);
-                            }
-                        }
-                    }
-                });
-            }
-        });
-
+        // Processing Loop Optimization
         function onResults(results) {
+            // Sembunyikan Loading Indicator saat frame pertama sudah berhasil diproses
+            if (!isLiveViewLoaded) {
+                isLiveViewLoaded = true;
+                loadingOverlay.style.opacity = '0';
+                setTimeout(() => {
+                    loadingOverlay.style.display = 'none';
+                }, 300);
+            }
+
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
@@ -475,9 +660,6 @@
                 canvasCtx.drawImage(paintCanvas, 0, 0);
             }
 
-            // Gambar Header UI
-            drawHeader(canvasCtx);
-
             if (results.multiHandLandmarks) {
                 for (let i = 0; i < results.multiHandLandmarks.length; i++) {
                     const landmarks = results.multiHandLandmarks[i];
@@ -486,7 +668,7 @@
                     const x1 = Math.floor((1 - landmarks[8].x) * canvasElement.width);
                     const y1 = Math.floor(landmarks[8].y * canvasElement.height);
 
-                    // Mode Seleksi (Telunjuk & Tengah Terangkat) - HANYA UNTUK GESTURE ERASER DAN CLEAR
+                    // Mode Eraser / Clear Gesture (Telunjuk & Tengah Terangkat)
                     if (fingers[1] && fingers[2]) {
                         if (isDrawingState[i]) {
                             pushUndoState();
@@ -501,26 +683,19 @@
                         canvasCtx.fillStyle = drawColor;
                         canvasCtx.fill();
 
-                        // Interaksi GESTURE: HANYA ERASER & CLEAR
-                        if (y1 < 100) {
-                            headerRects.forEach(item => {
-                                const [rx1, ry1, rx2, ry2] = item.rect;
-                                if (x1 > rx1 && x1 < rx2 && y1 > ry1 && y1 < ry2) {
-                                    if (item.type === "gesture_eraser") {
-                                        drawColor = "#000000";
-                                    } else if (item.type === "gesture_clear" && (Date.now() - lastActionTime) > 1000) {
-                                        lastActionTime = Date.now();
-                                        paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
-                                        pushUndoState();
-                                        isPhotoTaken = false;
-                                        frozenCanvasImage = null;
-                                        document.getElementById('download_action_wrapper').style.display = 'none';
-                                    }
-                                }
-                            });
+                        // Gesture Clear jika ditahan di bagian atas screen
+                        if (y1 < (canvasElement.height * 0.1) && (Date.now() - lastActionTime) > 1000) {
+                            lastActionTime = Date.now();
+                            paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+                            pushUndoState();
+                            isPhotoTaken = false;
+                            frozenCanvasImage = null;
+                            document.getElementById('download_action_wrapper').style.display = 'none';
+                            document.getElementById('camera_icon_inner').innerHTML = cameraIconSVG;
+                            document.getElementById('btn_camera').title = "Ambil Foto Snapshot";
                         }
                     }
-                    // Mode Menggambar (Hanya Telunjuk Terangkat, tidak aktif saat foto di-freeze)
+                    // Mode Menggambar (Hanya Telunjuk Terangkat)
                     else if (fingers[1] && !fingers[2] && !isPhotoTaken) {
                         if (!isDrawingState[i]) {
                             isDrawingState[i] = true;
@@ -566,32 +741,39 @@
             }
         }
 
-        // Event Listener Tombol Download Pojok Kanan Atas
+        // Event Listener Tombol Download Snapshot
         document.getElementById('btn_download').addEventListener('click', () => {
             if (frozenCanvasImage) {
                 downloadImage(frozenCanvasImage.toDataURL('image/png'), `virtual_paint_photo_${Date.now()}.png`);
             }
         });
 
+        // Optimization: Model complexity 0 for faster performance on mobile/browser
         const hands = new Hands({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
 
         hands.setOptions({
-            maxNumHands: 2,
-            modelComplexity: 1,
+            maxNumHands: 1,
+            modelComplexity: 0,
             minDetectionConfidence: 0.5,
             minTrackingConfidence: 0.5
         });
 
         hands.onResults(onResults);
 
+        // Frame rate limiting / lightweight rendering
+        let lastProcessTime = 0;
         const camera = new Camera(videoElement, {
             onFrame: async () => {
-                await hands.send({ image: videoElement });
+                const now = Date.now();
+                if (now - lastProcessTime > 30) { // Max ~30 FPS tracking to save CPU/GPU
+                    lastProcessTime = now;
+                    await hands.send({ image: videoElement });
+                }
             },
-            width: 1280,
-            height: 720
+            width: 640,
+            height: 480
         });
         camera.start();
     </script>
@@ -602,4 +784,7 @@
 
 
 
-
+
+
+
+
