@@ -762,18 +762,32 @@
 
         hands.onResults(onResults);
 
-        // Frame rate limiting / lightweight rendering
+        // Frame rate limiting & smooth rendering loop optimization
+        let isProcessingFrame = false;
         let lastProcessTime = 0;
+
+        // Dynamic resolution target depending on device performance/screen width
+        const targetWidth = window.innerWidth <= 600 ? 480 : 640;
+        const targetHeight = window.innerWidth <= 600 ? 360 : 480;
+
         const camera = new Camera(videoElement, {
             onFrame: async () => {
-                const now = Date.now();
-                if (now - lastProcessTime > 30) { // Max ~30 FPS tracking to save CPU/GPU
+                const now = performance.now();
+                // Throttle frame processing (~30 FPS / min 33ms interval) & prevent dropped frame stacking
+                if (!isProcessingFrame && (now - lastProcessTime >= 33)) {
+                    isProcessingFrame = true;
                     lastProcessTime = now;
-                    await hands.send({ image: videoElement });
+                    try {
+                        await hands.send({ image: videoElement });
+                    } catch (err) {
+                        console.warn("Hand tracking frame processing skipped:", err);
+                    } finally {
+                        isProcessingFrame = false;
+                    }
                 }
             },
-            width: 640,
-            height: 480
+            width: targetWidth,
+            height: targetHeight
         });
         camera.start();
     </script>
