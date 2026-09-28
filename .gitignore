@@ -25,3 +25,6 @@ dist/
 # OS
 Thumbs.db
 .DS_Store
+
+# HTML
+index.html
